@@ -131,3 +131,4 @@ dmypy.json
 # data & queries
 dataset.csv
 queries/
+.idea/
