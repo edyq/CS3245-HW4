@@ -96,6 +96,13 @@ def build_index(in_csv, out_dict, out_postings):
                 else:
                     position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
 
+        # sort by term and then sort by docIDs for each term in position_index
+        position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
+                          for term in sorted(position_index.keys())}
+
+        print(position_index)
+
+
 
 input_directory = output_file_dictionary = output_file_postings = None
 
