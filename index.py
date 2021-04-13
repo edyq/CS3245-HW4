@@ -7,11 +7,12 @@ import math
 import getopt
 import pickle
 import string
+import csv
 from nltk.tokenize import sent_tokenize, TweetTokenizer
 tknzr = TweetTokenizer()
 from nltk.stem.porter import PorterStemmer
 stemmer = PorterStemmer()
-
+csv.field_size_limit(sys.maxsize)
 
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
@@ -67,69 +68,29 @@ def normalise_weight(term_weight_dict):
     return math.sqrt(sum)
 
 
-def build_index(in_dir, out_dict, out_postings):
+def build_index(in_csv, out_dict, out_postings):
     """
     build index from documents stored in the input directory,
     then output the dictionary file and postings file
     """
     print('indexing...')
 
-    # compute term frequency and term weights for each document and add into the dictionary of postings
-    postings_dict = {}
-    all_document_ids = sorted([int(doc_id) for doc_id in os.listdir(in_dir)])
-    for doc_id in all_document_ids:
-        doc_dir = os.path.join(in_dir, str(doc_id))
-        with open(doc_dir, 'r') as f:
-            term_freq_dict = {}
+    count = 0
+    smaller_csv = []
+    with open(in_csv, newline='') as f:
+        reader = csv.reader(f, dialect='excel')
+        for row in reader:
+            count += 1
+            if count == 1:
+                smaller_csv.append(row)
+            elif count > 17145:
+                smaller_csv.append(row)
+            elif count % 200 == 0:
+                smaller_csv.append(row)
 
-            for line in f:
-                tokens = preprocess(line)
-                for token in tokens:
-                    if token not in term_freq_dict:
-                        term_freq_dict[token] = 1
-                    else:
-                        term_freq_dict[token] += 1
-
-            # compute and store 1 + log(tf)
-            for term, freq in term_freq_dict.items():
-                term_freq_dict[term] = compute_log_tf(freq)
-
-            # compute document length
-            doc_len = normalise_weight(term_freq_dict)
-
-            # store in postings in the format of (doc_id, normalized_weight)
-            for term, log_tf in term_freq_dict.items():
-                if term not in postings_dict:
-                    postings_dict[term] = [(doc_id, log_tf/doc_len)]
-                else:
-                    postings_dict[term].append((doc_id, log_tf/doc_len))
-
-    # sort the postings dict by term
-    sorted_postings_dict = {key: postings_dict[key] for key in sorted(postings_dict.keys())}
-
-    # output to dictionary.txt and postings.txt
-    dictionary_txt = {'collection_size': len(all_document_ids)}
-    offset_dict = {}
-    postings_txt = b''
-    offset = 0
-
-    for term, posting in sorted_postings_dict.items():
-        pickled_posting = pickle.dumps(posting)
-        pickled_len = len(pickled_posting)
-
-        # store offset, length of pickle object, and document frequency in the dictionary
-        offset_dict[term] = (offset, pickled_len, len(posting))
-        offset += pickled_len
-        postings_txt += pickled_posting
-
-    # output to files (store all document IDs for processing NOT queries in dictionary.txt as well)
-    dictionary_txt['dictionary'] = offset_dict
-
-    with open(out_dict, 'wb') as d:
-        pickle.dump(dictionary_txt, d)
-
-    with open(out_postings, 'wb') as p:
-        p.write(postings_txt)
+    with open('smaller_dataset.csv', 'w', newline='') as w:
+        writer = csv.writer(w)
+        writer.writerows(smaller_csv)
 
 
 input_directory = output_file_dictionary = output_file_postings = None
