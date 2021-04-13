@@ -8,43 +8,26 @@ import getopt
 import pickle
 import string
 import csv
-from nltk.tokenize import sent_tokenize, TweetTokenizer
-tknzr = TweetTokenizer()
+import re
+from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.stem.porter import PorterStemmer
 stemmer = PorterStemmer()
 csv.field_size_limit(sys.maxsize)
+
 
 def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
 
 
-def is_word(word):
-    """
-    Check if a word is a valid term. The word is valid only if it does not contain more than one non-alphabet.
-    """
-    num_non_alphabets = 0
-    for char in word:
-        if not char.isalpha():
-            num_non_alphabets += 1
+def preprocess(field):
+    cleaned_field = re.sub('//<!\\[CDATA\\[.*?//\\]\\]>', '', field, flags=re.DOTALL)
+    escape_chars = ['\xa0', '\n', '\t', '\r']
+    for escape_char in escape_chars:
+        cleaned_field = cleaned_field.replace(escape_char, ' ')
 
-    if num_non_alphabets > 1:
-        return False
-    else:
-        if len(word) == 1 and num_non_alphabets == 1:
-            return False
-        else:
-            return True
-
-
-def preprocess(line):
-    """
-    Perform case-folding, tokenization and stemming for a line.
-    """
-    words_by_sent = [tknzr.tokenize(t) for t in sent_tokenize(line.lower())]
-    stemmed_words = [stemmer.stem(word) for words in words_by_sent for word in words]
-
-    # remove punctuations and numbers
-    return [word for word in stemmed_words if is_word(word)]
+    words_by_sent = [word_tokenize(t) for t in sent_tokenize(cleaned_field.lower())]
+    cleaned_field = [stemmer.stem(word) for words in words_by_sent for word in words if word not in string.punctuation]
+    return cleaned_field
 
 
 def compute_log_tf(freq):
@@ -75,22 +58,17 @@ def build_index(in_csv, out_dict, out_postings):
     """
     print('indexing...')
 
-    count = 0
-    smaller_csv = []
     with open(in_csv, newline='') as f:
         reader = csv.reader(f, dialect='excel')
         for row in reader:
-            count += 1
-            if count == 1:
-                smaller_csv.append(row)
-            elif count > 17145:
-                smaller_csv.append(row)
-            elif count % 200 == 0:
-                smaller_csv.append(row)
+            if row[0] == 'document_id':
+                continue
 
-    with open('smaller_dataset.csv', 'w', newline='') as w:
-        writer = csv.writer(w)
-        writer.writerows(smaller_csv)
+            doc_id, date = row[0], row[3]
+            title, content, court = preprocess(row[1]), preprocess(row[2]), preprocess(row[4])
+
+            # aggregating title, content, court and date for now; no structure.
+
 
 
 input_directory = output_file_dictionary = output_file_postings = None
