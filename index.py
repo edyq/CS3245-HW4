@@ -58,17 +58,43 @@ def build_index(in_csv, out_dict, out_postings):
     """
     print('indexing...')
 
+    position_index = {}
+
     with open(in_csv, newline='') as f:
         reader = csv.reader(f, dialect='excel')
         for row in reader:
             if row[0] == 'document_id':
                 continue
 
-            doc_id, date = row[0], row[3]
-            title, content, court = preprocess(row[1]), preprocess(row[2]), preprocess(row[4])
-
             # aggregating title, content, court and date for now; no structure.
+            doc_id, date = row[0], [row[3]]
+            title, content, court = preprocess(row[1]), preprocess(row[2]), preprocess(row[4])
+            doc_terms = title + content + date + court
 
+            # tally term frequency and positions for each term
+            doc_term_freq = {}   # {term: freq}
+            doc_term_positions = {}  # {term: [1, 2, 3, 4]}
+            for pos, term in enumerate(doc_terms):
+                if term not in doc_term_freq:
+                    doc_term_freq[term] = 1
+                    doc_term_positions[term] = [pos]
+                else:
+                    doc_term_freq[term] += 1
+                    doc_term_positions[term].append(pos)
+
+            # compute log tf for each term using doc_term_freq
+            for term, freq in doc_term_freq.items():
+                doc_term_freq[term] = compute_log_tf(freq)
+
+            # compute document length
+            doc_len = normalise_weight(doc_term_freq)
+
+            # append <docID: [normalized tf, [...positions...]]> to position_index
+            for term, log_tf in doc_term_freq.items():
+                if term not in position_index:
+                    position_index[term] = {doc_id: [log_tf/doc_len, doc_term_positions[term]]}
+                else:
+                    position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
 
 
 input_directory = output_file_dictionary = output_file_postings = None
