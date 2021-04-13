@@ -19,14 +19,67 @@ def usage():
     print("usage: " + sys.argv[0] + " -i directory-of-documents -d dictionary-file -p postings-file")
 
 
+def remove_prefix_num(word):
+    """
+    Remove the preceding paragraph number in front of the first word of each paragraph e.g. "3Another", "5The"
+    very difficult...
+    """
+    common_order_suffix = ['st', 'nd', 'rd', 'th']
+    if word[0].isnumeric() and word[-1].isalpha() and word[-2].isalpha() and word[-2:] not in common_order_suffix:
+        for ind, char in enumerate(word):
+            if char.isnumeric():
+                continue
+            else:
+                return word[ind:]
+    else:
+        return word
+
+
+def remove_attached_punctuation(word):
+    """
+    Remove punctuations that have not been tokenized and are attached to a term, e.g. '.hello.'
+    """
+    if word[0] in string.punctuation:
+        word = word[1:]
+
+    if word[-1] in string.punctuation:
+        word = word[:-1]
+
+    return word
+
+
 def preprocess(field):
+
+    # remove weird code segment and website link
     cleaned_field = re.sub('//<!\\[CDATA\\[.*?//\\]\\]>', '', field, flags=re.DOTALL)
-    escape_chars = ['\xa0', '\n', '\t', '\r']
+    cleaned_field = re.sub('<.*?>', '', cleaned_field, flags=re.DOTALL)
+    # if cleaned_field != field:
+    #     split_cleaned = set(cleaned_field.split())
+    #     split_original = set(field.split())
+    #     diff = split_cleaned.symmetric_difference(split_original)
+    #     diff = ' '.join(diff)
+    #     print(diff)
+
+
+    # remove all escape characters
+    escape_chars = ['\xa0', '\n', '\t', '\r', '\'']
     for escape_char in escape_chars:
         cleaned_field = cleaned_field.replace(escape_char, ' ')
 
+    # apply case_folding, sent_tokenize and word_tokenize
     words_by_sent = [word_tokenize(t) for t in sent_tokenize(cleaned_field.lower())]
-    cleaned_field = [stemmer.stem(word) for words in words_by_sent for word in words if word not in string.punctuation]
+
+    # for each word, remove prefix number and suffix punctuation and then apply stemmer
+    cleaned_field = []
+    for words in words_by_sent:
+        for word in words:
+            if word not in string.punctuation:
+                word = remove_prefix_num(word)
+                word = remove_attached_punctuation(word)
+                word = stemmer.stem(word)
+                if word not in string.punctuation:
+                    cleaned_field.append(word)
+
     return cleaned_field
 
 
@@ -66,6 +119,9 @@ def build_index(in_csv, out_dict, out_postings):
             if row[0] == 'document_id':
                 continue
 
+            # if row[0] == '3751615':
+            #     print(row)
+
             # aggregating title, content, court and date for now; no structure.
             doc_id, date = row[0], [row[3]]
             title, content, court = preprocess(row[1]), preprocess(row[2]), preprocess(row[4])
@@ -100,7 +156,7 @@ def build_index(in_csv, out_dict, out_postings):
         position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
                           for term in sorted(position_index.keys())}
 
-        print(position_index)
+        print(len(position_index))
 
 
 
