@@ -112,10 +112,12 @@ def build_index(in_csv, out_dict, out_postings):
     print('indexing...')
 
     position_index = {}
-
+    doc_count = 0
     with open(in_csv, newline='') as f:
         reader = csv.reader(f, dialect='excel')
         for row in reader:
+            doc_count += 1
+
             if row[0] == 'document_id':
                 continue
 
@@ -152,11 +154,35 @@ def build_index(in_csv, out_dict, out_postings):
                 else:
                     position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
 
-        # sort by term and then sort by docIDs for each term in position_index
-        position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
-                          for term in sorted(position_index.keys())}
+    # sort by term and then sort by docIDs for each term in position_index
+    position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
+                      for term in sorted(position_index.keys())}
 
-        print(len(position_index))
+    # write to dictionary.txt and postings.txt
+    dictionary = {}
+    postings_txt = b''
+    offset = 0
+
+    for term, posting in position_index.items():
+        pickled_posting = pickle.dumps(posting)
+        pickled_len = len(pickled_posting)
+
+        dictionary[term] = (len(posting), offset)
+        offset += pickled_len
+        postings_txt += pickled_posting
+
+    dictionary_txt = {'collection_size': doc_count,
+                      'dictionary': dictionary}
+
+    with open(out_dict, 'wb') as d:
+        pickle.dump(dictionary_txt, d)
+
+    with open(out_postings, 'wb') as p:
+        pickle.dump(postings_txt, p)
+
+
+
+
 
 
 
