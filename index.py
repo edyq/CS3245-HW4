@@ -157,10 +157,12 @@ def build_index(in_csv, out_dict, out_postings):
                     position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
 
     # sort by term and then sort by docIDs for each term in position_index
-    position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
-                      for term in sorted(position_index.keys())}
+    # position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
+    #                   for term in sorted(position_index.keys())}
+    # no need to sort right?
 
     # write to dictionary.txt and postings.txt
+    print("writing to file...")
     dictionary = {}
     postings_txt = b''
     offset = 0
