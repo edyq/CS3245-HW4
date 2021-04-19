@@ -178,7 +178,7 @@ def build_index(in_csv, out_dict, out_postings):
         pickle.dump(dictionary_txt, d)
 
     with open(out_postings, 'wb') as p:
-        pickle.dump(postings_txt, p)
+        p.write(postings_txt)
 
 
 
