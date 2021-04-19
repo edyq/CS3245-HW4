@@ -5,13 +5,19 @@ import getopt
 import pickle
 import string
 import heapq
+import nltk
 from nltk import PorterStemmer
 from nltk import word_tokenize
+from nltk.corpus import wordnet
+from nltk.corpus import stopwords
 from collections import defaultdict
 from collections import Counter
 
 dictionary = {}
 collection_size = 0
+nltk.download('stopwords')
+nltk.download('wordnet')  # need to ask prof whether these already exist on server
+stop_words=set(stopwords.words("english"))
 
 
 def usage():
@@ -31,8 +37,8 @@ def run_search(dict_file, postings_file, query_file, results_file):
 
     # TODO: make use of relevant docs provided in the query
     query_line = open(query_file, 'r').readline().rstrip()
-    query_tokens = tokenize(process_query(query_line))
-    doc_score = query_free_text(query_tokens)
+    expanded_query_tokens = tokenize(process_query(query_line))
+    doc_score = query_free_text(expanded_query_tokens)
     # query_tokens = process_query(query_line)
     # doc_score = {}
     # for query in query_tokens:
@@ -47,6 +53,25 @@ def run_search(dict_file, postings_file, query_file, results_file):
     out_file = open(results_file, 'w')
     out_file.write(result)
     out_file.close()
+
+
+def expand_query(tokens):
+    synonyms = []
+    count = 0
+    for term in tokens:
+        for syn in wordnet.synsets(term):
+            if count >= 3:
+                count = 0
+                break
+            else:
+                for l in syn.lemmas():
+                    if count >= 3:
+                        break
+                    else:
+                        if l.name() not in synonyms:
+                            synonyms.append(l.name())
+                            count += 1
+    return synonyms
 
 
 def process_query(query):
@@ -77,7 +102,7 @@ def process_query(query):
                 word = word[:-1]
             processed_query.append(word)
 
-    return ' '.join(processed_query)
+    return ''.join(processed_query)
 
 
 def tokenize(query):
@@ -90,17 +115,18 @@ def tokenize(query):
     """
     tokens = word_tokenize(query.lower())
     stemmer = PorterStemmer()
-    cleaned_field = []
 
+    filtered_tokens = []
     for word in tokens:
-        if word not in string.punctuation:
-            # hopefully no such thing appears in search
-            # word = remove_prefix_num(word)
-            # word = remove_attached_punctuation(word)
-            word = stemmer.stem(word)
-            if word not in string.punctuation:
-                cleaned_field.append(word)
-    return cleaned_field
+        if word not in string.punctuation and word not in stop_words:
+            filtered_tokens.append(word)
+
+    print("original query: ", filtered_tokens)
+
+    # query expansion using wordnet
+    expanded_tokens = expand_query(filtered_tokens)
+    print("expanded query: ", expanded_tokens)
+    return [stemmer.stem(word) for word in expanded_tokens]
 
 
 def update_doc_score(new_score):
