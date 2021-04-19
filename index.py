@@ -117,6 +117,8 @@ def build_index(in_csv, out_dict, out_postings):
         reader = csv.reader(f, dialect='excel')
         for row in reader:
             doc_count += 1
+            if doc_count % 100 == 0:
+                print("%d indexed!"% doc_count)
 
             if row[0] == 'document_id':
                 continue
