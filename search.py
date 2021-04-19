@@ -31,14 +31,16 @@ def run_search(dict_file, postings_file, query_file, results_file):
 
     # TODO: make use of relevant docs provided in the query
     query_line = open(query_file, 'r').readline().rstrip()
-    query_tokens = process_query(query_line)
-    doc_score = {}
-    for query in query_tokens:
-        if isinstance(query[0], list):
-            new_score = query_phrase(query)
-        else:
-            new_score = query_free_text(query)
-        doc_score = update_doc_score(new_score)
+    query_tokens = tokenize(process_query(query_line))
+    doc_score = query_free_text(query_tokens)
+    # query_tokens = process_query(query_line)
+    # doc_score = {}
+    # for query in query_tokens:
+    #     if isinstance(query[0], list):
+    #         new_score = query_phrase(query)
+    #     else:
+    #         new_score = query_free_text(query)
+    #     doc_score = update_doc_score(new_score)
 
     # sth like this
     result = ' '.join(map(str, [k for k, v in sorted(doc_score.items(), key=lambda item: item[1], reverse=True)]))
@@ -49,8 +51,9 @@ def run_search(dict_file, postings_file, query_file, results_file):
 
 def process_query(query):
     """
+    FOR NOW: doing everything as free text
     :param query: string
-    :return: list
+    :return: string
     phrasal queries are enclosed in List object again
     return processed_query = [[[]], [], []]
     where processed_query[0] stands for phrasal query
@@ -67,14 +70,14 @@ def process_query(query):
     query_list = query.split(' AND ')
     processed_query = []
     for query in query_list:
-        if query[0] == '"' and query[-1] == '"':
-            query = query[1: -1]
-            tokens = tokenize(query)
-            processed_query.append([tokens])
-        else:
-            tokens = tokenize(query)
-            processed_query.append(tokens)
-    return processed_query
+        for word in query:
+            if word[0] == '"':
+                word = word[1:]
+            elif word[-1] == '"':
+                word = word[:-1]
+            processed_query.append(word)
+
+    return ' '.join(processed_query)
 
 
 def tokenize(query):
