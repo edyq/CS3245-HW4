@@ -181,11 +181,6 @@ def build_index(in_csv, out_dict, out_postings):
         p.write(postings_txt)
 
 
-
-
-
-
-
 input_directory = output_file_dictionary = output_file_postings = None
 
 try:
