@@ -5,6 +5,7 @@ import getopt
 import pickle
 import string
 import heapq
+import re
 import nltk
 from nltk import PorterStemmer
 from nltk import word_tokenize
@@ -35,27 +36,32 @@ def run_search(dict_file, postings_file, query_file, results_file):
     collection_size = dictionary_obj['collection_size']
     dic_file.close()
 
-    # TODO: make use of relevant docs provided in the query
+    # step 1: treat everything as free text query; obtain doc_score
     query_line = open(query_file, 'r').readline().rstrip()
-    expanded_query_tokens = tokenize(process_query(query_line))
+    free_text_query = process_query_as_free_text(query_line)
+    expanded_query_tokens = tokenize_free_text(free_text_query)
     doc_score = query_free_text(expanded_query_tokens)
-    # query_tokens = process_query(query_line)
-    # doc_score = {}
-    # for query in query_tokens:
-    #     if isinstance(query[0], list):
-    #         new_score = query_phrase(query)
-    #     else:
-    #         new_score = query_free_text(query)
-    #     doc_score = update_doc_score(new_score)
 
-    # sth like this
-    result = ' '.join(map(str, [k for k, v in sorted(doc_score.items(), key=lambda item: item[1], reverse=True)]))
+    # step 2: extract the phrasal query; obtain no_matched_phrases / no_phrases_in_the_query
+    phrasal_query = extract_phrasal_query(query_line)
+    phrasal_doc_score = query_phrase(phrasal_query)
+
+    # step 3: adjust doc_score for those with matching phrases
+    adjusted_doc_score = adjust_doc_score(doc_score, phrasal_doc_score, 0.1)
+
+    # step 4: sort and write to results_file
+    result = ' '.join(map(str, [k for k, v in sorted(adjusted_doc_score.items(), key=lambda item: item[1], reverse=True)]))
     out_file = open(results_file, 'w')
     out_file.write(result)
     out_file.close()
 
 
 def expand_query(tokens):
+    """
+    Expand the original free text query with synonyms from wordnet
+    :param tokens: ['token_1', 'token_2']
+    :return: a list of synonyms
+    """
     synonyms = []
     count = 0
     for term in tokens:
@@ -74,24 +80,27 @@ def expand_query(tokens):
     return synonyms
 
 
-def process_query(query):
+def extract_phrasal_query(query):
     """
-    FOR NOW: doing everything as free text
+    Extract the phrasal queries from the original query with regex
+    :param query: string
+    :return: list
+    """
+    phrases = re.findall(r'\"(.+?)\"', query)
+    stemmer = PorterStemmer()
+    result = []
+    for phrase in phrases:
+        result.append([stemmer.stem(word) for word in word_tokenize(phrase.lower())])
+    return result
+
+
+def process_query_as_free_text(query):
+    """
+    FOR NOW: doing everything as free text; adjust score for doc matching the phrase
     :param query: string
     :return: string
-    phrasal queries are enclosed in List object again
-    return processed_query = [[[]], [], []]
-    where processed_query[0] stands for phrasal query
-    processed_query[1] and processed_query[2] are free text queries
-    AND relation between the elements of the outer list
+
     """
-
-    # TODO: handle query like '"small dog" puppy'
-    # https://piazza.com/class/kjmny91pkrx6ag?cid=214
-    # phrasal and Boolean queries shouldn't be treated as strict operators, but rather influence the ranking of
-    # documents retrieved. That is, you likely want to return "little puppy chihuahua" documents at the top, but also
-    # still return "little chihuahua puppy" somewhere below.
-
     query_list = query.split(' AND ')
     processed_query = []
     for query in query_list:
@@ -105,11 +114,11 @@ def process_query(query):
     return ''.join(processed_query)
 
 
-def tokenize(query):
+def tokenize_free_text(query):
     """
     1. lower case
     2. word_tokenize
-    3.
+    3. query expansion
     :param query:
     :return:
     """
@@ -129,44 +138,120 @@ def tokenize(query):
     return [stemmer.stem(word) for word in expanded_tokens]
 
 
-def update_doc_score(new_score):
+def adjust_doc_score(doc_score, phrasal_doc_score, alpha):
     """
-    perform AND operation, to update score for documents
+    adjust score for docs that match the exact phrasal query
     :param new_score: score for documents in a query
     :return: updated score
     """
-    return None
+    score_average = sum(doc_score.values()) / len(doc_score)
+    for doc in doc_score.keys():
+        if doc in phrasal_doc_score.keys():
+            doc_score[doc] += score_average * alpha * phrasal_doc_score[doc]
+    return doc_score
 
 
 def query_phrase(query):
     """
     still using lnt.ltc
-    :param query:
-    :return:
+    :param query = [['phrasal', 'query'], ['phrasal', 'query']]
+    :return: phrasal_doc_score = {doc_id: match_percentage, doc_id: match_percentage}
     """
     global dictionary
     global collection_size
-    # TODO ??????????? What's this supposed to mean ???????????
-    # https://piazza.com/class/kjmny91pkrx6ag?cid=214
-    # phrasal and Boolean queries shouldn't be treated as strict operators, but rather influence the ranking of
-    # documents retrieved. That is, you likely want to return "little puppy chihuahua" documents at the top, but also
-    # still return "little chihuahua puppy" somewhere below.
 
-    # idf for query phrase
-    # tf = 1 since it is a phrasal query and I treat a phrase as 1 term
-    # TODO - calculate idf for the query phrase
+    no_phrases = len(query)
+    phrasal_doc_score = defaultdict(lambda: 0)
     phrase_postings = []
     p_file = open(postings_file, 'rb')
-    for term in query:
-        offset = dictionary[term][1]
-        p_file.seek(offset)
-        posting = pickle.load(p_file)
-        phrase_postings.append(posting)
+    for phrase in query:
+        phrase_postings.append([])
+        for term in phrase:
+            if term in dictionary.keys():
+                offset = dictionary[term][1]
+                p_file.seek(offset)
+                posting = pickle.load(p_file)
+                phrase_postings[-1].append(posting)
+            else:
+                print('unknown query term ' + term)
+                sys.exit(2)
     p_file.close()
 
+    for i in range(no_phrases):
+        valid_docs = []
+        if len(query[i]) == 2:
+            valid_docs = query_biword(phrase_postings[i])
+        elif len(query[i]) == 3:
+            valid_docs = query_triword(phrase_postings[i])
+        else:
+            print('only phrases with 2 or 3 words are supported')
+            sys.exit(2)
+        for doc in valid_docs:
+            phrasal_doc_score[doc] += 1 / no_phrases
 
-    # tf for query phrase in the document
-    # TODO - tf for the phase in the documents
+    return phrasal_doc_score
+
+
+def query_biword(phrase_postings):
+    """
+    return docs matching the phrase
+    :param phrase: ['phrasal', 'query']
+    :param phrase_postings: [{doc_id: [tf-idf, [position index, position index]], doc_id:[]}, {doc_id:[], }]
+    :return: list of doc ids that matches the phrase
+    """
+    result = []
+    doc_set_1 = set(list(map(str, phrase_postings[0].keys())))
+    doc_set_2 = set(list(map(str, phrase_postings[1].keys())))
+    docs = list(doc_set_1.intersection(doc_set_2))
+
+    for doc in docs:
+        ptr_1 = 0
+        ptr_2 = 0
+        posting_1 = phrase_postings[0][doc][1]
+        posting_2 = phrase_postings[1][doc][1]
+        while ptr_1 < len(posting_1) and ptr_2 < len(posting_2):
+            if posting_1[ptr_1] + 1 == posting_2[ptr_2]:
+                result.append(doc)
+                break
+            elif posting_1[ptr_1] + 1 > posting_2[ptr_2]:
+                ptr_2 += 1
+            else:
+                ptr_1 += 1
+    print(result)
+    return result
+
+
+def query_triword(phrase_postings):
+    """
+    :param phrase:
+    :param phrase_postings:
+    :return:
+    """
+    result = []
+    doc_set_1 = set(list(map(str, phrase_postings[0].keys())))
+    doc_set_2 = set(list(map(str, phrase_postings[1].keys())))
+    doc_set_3 = set(list(map(str, phrase_postings[2].keys())))
+    docs = list(doc_set_1.intersection(doc_set_2).intersection(doc_set_3))
+
+    for doc in docs:
+        ptr_1 = 0
+        ptr_2 = 0
+        ptr_3 = 0
+        posting_1 = phrase_postings[0][doc][1]
+        posting_2 = phrase_postings[1][doc][1]
+        posting_3 = phrase_postings[2][doc][1]
+        while ptr_1 < len(posting_1) and ptr_2 < len(posting_2) and ptr_3 < len(posting_3):
+            if posting_1[ptr_1] + 1 == posting_2[ptr_2] and posting_2[ptr_2] + 1 == posting_3[ptr_3]:
+                result.append(doc)
+                break
+            elif posting_1[ptr_1] + 1 > posting_2[ptr_2]:
+                ptr_2 += 1
+            elif posting_2[ptr_2] + 1 > posting_3[ptr_3]:
+                ptr_3 += 1
+            else:
+                ptr_1 += 1
+    print(result)
+    return result
 
 
 def query_free_text(query_terms):
