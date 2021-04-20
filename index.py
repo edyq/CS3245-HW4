@@ -180,7 +180,7 @@ def build_index(in_csv, out_dict, out_postings):
             offset += pickled_len
             #postings_txt += pickled_posting
             p.write(pickled_posting)
-            if count % 100 == 0:
+            if count % 1000 == 0:
                 print("%d writen to file!" % count)
 
     dictionary_txt = {'collection_size': doc_count,
