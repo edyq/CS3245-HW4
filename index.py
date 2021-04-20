@@ -156,10 +156,10 @@ def build_index(in_csv, out_dict, out_postings):
                 else:
                     position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
 
-    # sort by term and then sort by docIDs for each term in position_index
-    # position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
-    #                   for term in sorted(position_index.keys())}
-    # no need to sort right?
+    print("sorting!")
+    #sort by term and then sort by docIDs for each term in position_index
+    position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
+                      for term in sorted(position_index.keys())}
 
     # write to dictionary.txt and postings.txt
     print("writing to file...")
@@ -167,22 +167,30 @@ def build_index(in_csv, out_dict, out_postings):
     postings_txt = b''
     offset = 0
 
-    for term, posting in position_index.items():
-        pickled_posting = pickle.dumps(posting)
-        pickled_len = len(pickled_posting)
+    print("Total: %d terms!" % len(position_index))
 
-        dictionary[term] = (len(posting), offset)
-        offset += pickled_len
-        postings_txt += pickled_posting
+    count = 0
+    with open(out_postings, 'ab') as p:
+        for term, posting in position_index.items():
+            count += 1
+            pickled_posting = pickle.dumps(posting)
+            pickled_len = len(pickled_posting)
+
+            dictionary[term] = (len(posting), offset)
+            offset += pickled_len
+            #postings_txt += pickled_posting
+            p.write(pickled_posting)
+            if count % 100 == 0:
+                print("%d writen to file!" % count)
 
     dictionary_txt = {'collection_size': doc_count,
                       'dictionary': dictionary}
 
     with open(out_dict, 'wb') as d:
         pickle.dump(dictionary_txt, d)
-
-    with open(out_postings, 'wb') as p:
-        p.write(postings_txt)
+    #
+    # with open(out_postings, 'wb') as p:
+    #     p.write(postings_txt)
 
 
 input_directory = output_file_dictionary = output_file_postings = None
