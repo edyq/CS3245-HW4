@@ -4,7 +4,6 @@ import math
 import getopt
 import pickle
 import string
-import heapq
 import re
 import nltk
 from nltk import PorterStemmer
@@ -17,7 +16,7 @@ from collections import Counter
 dictionary = {}
 collection_size = 0
 nltk.download('stopwords')
-nltk.download('wordnet')  # need to ask prof whether these already exist on server
+nltk.download('wordnet')
 stop_words=set(stopwords.words("english"))
 
 
@@ -26,6 +25,14 @@ def usage():
 
 
 def run_search(dict_file, postings_file, query_file, results_file):
+    """
+    run search with the query file
+    :param dict_file: name of the dictionary file
+    :param postings_file: name of the postings file
+    :param query_file: name of the query file
+    :param results_file: name of the results file where the query results would be written into
+    :return: None
+    """
     print('running search on the query...')
 
     global dictionary
@@ -39,6 +46,7 @@ def run_search(dict_file, postings_file, query_file, results_file):
     # step 1: treat everything as free text query; obtain doc_score
     query_line = open(query_file, 'r').readline().rstrip()
     free_text_query = process_query_as_free_text(query_line)
+    print('free text query: ', free_text_query)
     expanded_query_tokens = tokenize_free_text(free_text_query)
     doc_score = query_free_text(expanded_query_tokens)
 
@@ -58,7 +66,7 @@ def run_search(dict_file, postings_file, query_file, results_file):
 
 def expand_query(tokens):
     """
-    Expand the original free text query with synonyms from wordnet
+    Expand the original free text query with synonyms from wordnet; 2 synonyms for each word are added to the query
     :param tokens: ['token_1', 'token_2']
     :return: a list of synonyms
     """
@@ -91,36 +99,42 @@ def extract_phrasal_query(query):
     result = []
     for phrase in phrases:
         result.append([stemmer.stem(word) for word in word_tokenize(phrase.lower())])
+    print('phrases: ', result)
     return result
 
 
 def process_query_as_free_text(query):
     """
-    FOR NOW: doing everything as free text; adjust score for doc matching the phrase
+    convert the original query to free text query;
+    1. remove AND operator
+    2. remove double quotes for phrasal queries
     :param query: string
     :return: string
-
     """
-    query_list = query.split(' AND ')
+    query_list = [phrase.strip() for phrase in query.split('AND')]
     processed_query = []
     for query in query_list:
-        for word in query:
+        word_list = query.split(' ')
+        for word in word_list:
+            word = word.strip()
             if word[0] == '"':
                 word = word[1:]
             elif word[-1] == '"':
                 word = word[:-1]
             processed_query.append(word)
-
-    return ''.join(processed_query)
+    print('processed_query: ', ' '.join(processed_query))
+    return ' '.join(processed_query)
 
 
 def tokenize_free_text(query):
     """
-    1. lower case
-    2. word_tokenize
-    3. query expansion
-    :param query:
-    :return:
+    convert the query to free text query;
+    1. convert all query terms to lower case
+    2. remove terms that are punctuations and also, remove stop words
+    3. expand the query by adding synonyms
+    4. stem the terms with PorterStemmer
+    :param query: String
+    :return: a list of strings representing the query term
     """
     tokens = word_tokenize(query.lower())
     stemmer = PorterStemmer()
@@ -130,30 +144,34 @@ def tokenize_free_text(query):
         if word not in string.punctuation and word not in stop_words:
             filtered_tokens.append(word)
 
-    print("original query: ", filtered_tokens)
-
-    # query expansion using wordnet
     expanded_tokens = expand_query(filtered_tokens)
-    print("expanded query: ", expanded_tokens)
     return [stemmer.stem(word) for word in expanded_tokens]
 
 
 def adjust_doc_score(doc_score, phrasal_doc_score, alpha):
     """
-    adjust score for docs that match the exact phrasal query
-    :param new_score: score for documents in a query
+    adjust doc scores with phrasal query results
+    1. normalise the doc scores so that they fall within [0, 1]
+    2. increase score for documents that contain the exact phrase from the phrasal query
+    :param doc_score: original score for each document
+    :param phrasal_doc_score: doc score based on phrasal query result
+    :param alpha: hyper-parameter used to adjust score based on phrasal query results
     :return: updated score
     """
-    score_average = sum(doc_score.values()) / len(doc_score)
-    for doc in doc_score.keys():
-        if doc in phrasal_doc_score.keys():
-            doc_score[doc] += score_average * alpha * phrasal_doc_score[doc]
+    if len(doc_score) > 1:
+        score_min = min(doc_score.values())
+        score_max = max(doc_score.values())
+        for doc in doc_score.keys():
+            if score_max != score_min:
+                doc_score[doc] = (doc_score[doc] - score_min) / (score_max - score_min)
+            if doc in phrasal_doc_score.keys():
+                doc_score[doc] += alpha * phrasal_doc_score[doc]
     return doc_score
 
 
 def query_phrase(query):
     """
-    still using lnt.ltc
+    phrasal query on either bi-word or tri-word phrasal queries
     :param query = [['phrasal', 'query'], ['phrasal', 'query']]
     :return: phrasal_doc_score = {doc_id: match_percentage, doc_id: match_percentage}
     """
@@ -188,14 +206,13 @@ def query_phrase(query):
             sys.exit(2)
         for doc in valid_docs:
             phrasal_doc_score[doc] += 1 / no_phrases
-
+    print('phrasal doc score: ', phrasal_doc_score)
     return phrasal_doc_score
 
 
 def query_biword(phrase_postings):
     """
-    return docs matching the phrase
-    :param phrase: ['phrasal', 'query']
+    return docs matching the phrase; the phrase contains 2 words
     :param phrase_postings: [{doc_id: [tf-idf, [position index, position index]], doc_id:[]}, {doc_id:[], }]
     :return: list of doc ids that matches the phrase
     """
@@ -223,9 +240,8 @@ def query_biword(phrase_postings):
 
 def query_triword(phrase_postings):
     """
-    :param phrase:
-    :param phrase_postings:
-    :return:
+    :param phrase_postings for terms in the phrase in the order as they appear in the phrase
+    :return: list of doc ids that matches the phrase
     """
     result = []
     doc_set_1 = set(list(map(str, phrase_postings[0].keys())))
@@ -256,9 +272,9 @@ def query_triword(phrase_postings):
 
 def query_free_text(query_terms):
     """
-    still using lnc.ltc
-    :param query_terms:
-    :return:
+    free text query based on vector space model with ltc.lnc
+    :param query_terms: a list of terms representing the free text query
+    :return: document scores
     """
     global dictionary
     global collection_size
