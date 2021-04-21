@@ -1,7 +1,4 @@
 #!/usr/bin/python3
-import re
-import nltk
-import os
 import sys
 import math
 import getopt
@@ -22,7 +19,8 @@ def usage():
 def remove_prefix_num(word):
     """
     Remove the preceding paragraph number in front of the first word of each paragraph e.g. "3Another", "5The"
-    very difficult...
+    :param word: string; the word to be processed
+    :return: the processed word
     """
     common_order_suffix = ['st', 'nd', 'rd', 'th']
     if word[0].isnumeric() and word[-1].isalpha() and word[-2].isalpha() and word[-2:] not in common_order_suffix:
@@ -38,6 +36,8 @@ def remove_prefix_num(word):
 def remove_attached_punctuation(word):
     """
     Remove punctuations that have not been tokenized and are attached to a term, e.g. '.hello.'
+    :param word: string; the word to be processed
+    :return: the processed word
     """
     if word[0] in string.punctuation:
         word = word[1:]
@@ -49,17 +49,19 @@ def remove_attached_punctuation(word):
 
 
 def preprocess(field):
-
+    """
+    preprocess the document with the following steps
+    1. remove code segment and website links
+    2. remove escape characters
+    3. case folding, sent_tokenize, and word_tokenize
+    4. remove prefix number and suffix punctuation
+    5. apply stemming
+    :param field: string
+    :return: list
+    """
     # remove weird code segment and website link
     cleaned_field = re.sub('//<!\\[CDATA\\[.*?//\\]\\]>', '', field, flags=re.DOTALL)
     cleaned_field = re.sub('<.*?>', '', cleaned_field, flags=re.DOTALL)
-    # if cleaned_field != field:
-    #     split_cleaned = set(cleaned_field.split())
-    #     split_original = set(field.split())
-    #     diff = split_cleaned.symmetric_difference(split_original)
-    #     diff = ' '.join(diff)
-    #     print(diff)
-
 
     # remove all escape characters
     escape_chars = ['\xa0', '\n', '\t', '\r', '\'']
@@ -86,6 +88,8 @@ def preprocess(field):
 def compute_log_tf(freq):
     """
     Compute the log_tf weight.
+    :param freq: integer
+    :return: float
     """
     if freq > 0:
         return 1 + math.log(freq, 10)
@@ -96,6 +100,8 @@ def compute_log_tf(freq):
 def normalise_weight(term_weight_dict):
     """
     Compute the document length.
+    :param term_weight_dict: dictionary
+    :return: float
     """
     sum = 0
     for term, weight in term_weight_dict.items():
@@ -108,6 +114,10 @@ def build_index(in_csv, out_dict, out_postings):
     """
     build index from documents stored in the input directory,
     then output the dictionary file and postings file
+    :param in_csv: csv file containing the legal cases to be indexed
+    :param out_dict: dictionary file name
+    :param out_postings: posting file name
+    :return: None
     """
     print('indexing...')
 
@@ -122,9 +132,6 @@ def build_index(in_csv, out_dict, out_postings):
 
             if row[0] == 'document_id':
                 continue
-
-            # if row[0] == '3751615':
-            #     print(row)
 
             # aggregating title, content, court and date for now; no structure.
             doc_id, date = row[0], [row[3]]
@@ -155,11 +162,6 @@ def build_index(in_csv, out_dict, out_postings):
                     position_index[term] = {doc_id: [log_tf/doc_len, doc_term_positions[term]]}
                 else:
                     position_index[term][doc_id] = [log_tf/doc_len, doc_term_positions[term]]
-
-    # sort by term and then sort by docIDs for each term in position_index
-    # position_index = {term: {doc_id: position_index[term][doc_id] for doc_id in sorted(position_index[term].keys())}
-    #                   for term in sorted(position_index.keys())}
-    # no need to sort right?
 
     # write to dictionary.txt and postings.txt
     print("writing to file...")
