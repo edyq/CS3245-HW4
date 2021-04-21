@@ -24,7 +24,6 @@ Pickle object structure for dictionary.txt
 {
  'collection_size': size,
  'dictionary': {term: (doc frequency, offset)}
- 'doc_len': {}
 }
 
 Pickle object structure for postings.txt
@@ -65,13 +64,13 @@ and formatted correctly.
 
 Please put a "x" (without the double quotes) into the bracket of the appropriate statement.
 
-[x] We, A0164669M, certify that we have followed the CS 3245 Information
+[x] We, A0164669M and A0228393X, certify that we have followed the CS 3245 Information
 Retrieval class guidelines for homework assignments.  In particular, we
 expressly vow that we have followed the Facebook rule in discussing
 with others in doing the assignment and did not take notes (digital or
 printed) from the discussions.
 
-[ ] I/We, A0228393X, did not follow the class rules regarding homework
+[ ] I/We, A0000000X, did not follow the class rules regarding homework
 assignment, because of the following reason:
 
 <Please fill in>
