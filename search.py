@@ -144,8 +144,9 @@ def tokenize_free_text(query):
         if word not in string.punctuation and word not in stop_words:
             filtered_tokens.append(word)
 
-    expanded_tokens = expand_query(filtered_tokens)
-    return [stemmer.stem(word) for word in expanded_tokens]
+    # expanded_tokens = expand_query(filtered_tokens)
+    # after experiment, query without expansion gives a better performance.
+    return [stemmer.stem(word) for word in filtered_tokens]
 
 
 def adjust_doc_score(doc_score, phrasal_doc_score, alpha):

@@ -54,6 +54,15 @@ The major steps involved in the searching process are
         currently it is set to 0.1
 7. sort the adjusted doc_score and write to the results file
 
+EXPERIMENT
+After experiment, we found that the above-mentioned technique on query expansion with WordNet
+synonyms does not have positive effects on the performance. We think it might be because such
+expansion reduces the query precision and thus gives a larger error. Therefore, we have commented
+out the code section that implements it
+However, the way we adjust the doc score, and thus the ranking for query results with phrasal
+query actually gives a better performance. The exact comparison and scores are shown in the word
+document in this submission.
+
 == Files included with this submission ==
 
 List the files in your submission here and provide a short 1 line
