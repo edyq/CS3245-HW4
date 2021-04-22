@@ -16,7 +16,9 @@ from collections import Counter
 dictionary = {}
 collection_size = 0
 nltk.download('stopwords')
-nltk.download('wordnet')
+# No WordNet synonym expansion used in the final searching method
+# commenting out the downloading process to save time
+# nltk.download('wordnet')
 stop_words=set(stopwords.words("english"))
 
 
